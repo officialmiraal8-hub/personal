@@ -5,7 +5,7 @@ export default function MintPointsExample() {
     <div className="p-6 max-w-3xl mx-auto">
       <MintPoints
         currentPoints={5000}
-        onMint={(amount) => console.log('Minting', amount, 'XLM')}
+        walletAddress="GEXAMPLEWALLETADDRESS1234567890ABCDEFGHIJKLMNOPQRSTUV"
       />
     </div>
   )

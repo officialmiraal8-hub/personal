@@ -30,7 +30,7 @@ export default function ProjectCardExample() {
     <div className="max-w-sm">
       <ProjectCard 
         project={mockProject}
-        onParticipate={(id) => console.log('Participate in project:', id)}
+        walletAddress="GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       />
     </div>
   )

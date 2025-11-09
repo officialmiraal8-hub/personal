@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import AppHeader from "@/components/AppHeader";
 import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
@@ -12,6 +13,18 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { FaTwitter, FaTelegram, FaDiscord } from "react-icons/fa";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { User, Project } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function generateMockStellarAddress(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let address = 'G';
+  for (let i = 0; i < 55; i++) {
+    address += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return address;
+}
 
 export default function MainApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -20,117 +33,61 @@ export default function MainApp() {
   const [walletAddress, setWalletAddress] = useState<string>();
   const { toast } = useToast();
 
-  const mockUser = {
-    walletAddress: walletAddress || "",
-    starPoints: 15420,
-    referralCode: "STAR123ABC",
-  };
+  const referralCode = new URLSearchParams(window.location.search).get("ref");
 
-  const mockProjects = [
-    {
-      id: "1",
-      creatorId: "creator1",
-      name: "Luna Token",
-      symbol: "LUNA",
-      description: "A revolutionary DeFi token bringing liquidity to the Stellar ecosystem with innovative staking mechanisms.",
-      logoUrl: "",
-      totalSupply: "1000000000",
-      decimals: 7,
-      airdropPercent: 40,
-      creatorPercent: 30,
-      liquidityPercent: 30,
-      minimumLiquidity: "500",
-      hasVesting: true,
-      vestingPeriodDays: 180,
-      participationPeriodDays: 7,
-      twitterUrl: "",
-      telegramUrl: "",
-      websiteUrl: "",
-      contractAddress: "",
-      status: "active",
-      createdAt: new Date(),
-      endsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+  const { data: currentUser } = useQuery<User | null>({
+    queryKey: ["/api/users/me", walletAddress],
+    enabled: !!walletAddress,
+    queryFn: async () => {
+      if (!walletAddress) return null;
+      const res = await fetch(`/api/users/me?walletAddress=${encodeURIComponent(walletAddress)}`);
+      if (!res.ok) return null;
+      return res.json();
     },
-    {
-      id: "2",
-      creatorId: "creator2",
-      name: "Solar Network",
-      symbol: "SOLR",
-      description: "Decentralized energy trading platform powered by Stellar smart contracts for sustainable future.",
-      logoUrl: "",
-      totalSupply: "500000000",
-      decimals: 7,
-      airdropPercent: 50,
-      creatorPercent: 25,
-      liquidityPercent: 25,
-      minimumLiquidity: "1000",
-      hasVesting: false,
-      vestingPeriodDays: null,
-      participationPeriodDays: 10,
-      twitterUrl: "",
-      telegramUrl: "",
-      websiteUrl: "",
-      contractAddress: "",
-      status: "active",
-      createdAt: new Date(),
-      endsAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000),
+  });
+
+  const { data: referrals = [] } = useQuery<User[]>({
+    queryKey: ["/api/users", currentUser?.id, "referrals"],
+    enabled: !!currentUser?.id,
+  });
+
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<Project[]>({
+    queryKey: ["/api/projects"],
+    queryFn: async () => {
+      const res = await fetch("/api/projects");
+      if (!res.ok) throw new Error("Failed to fetch projects");
+      return res.json();
     },
-    {
-      id: "3",
-      creatorId: "creator3",
-      name: "Quantum Finance",
-      symbol: "QFIN",
-      description: "Next-generation algorithmic trading protocol with AI-powered market making on Stellar.",
-      logoUrl: "",
-      totalSupply: "2000000000",
-      decimals: 7,
-      airdropPercent: 45,
-      creatorPercent: 35,
-      liquidityPercent: 20,
-      minimumLiquidity: "750",
-      hasVesting: true,
-      vestingPeriodDays: 365,
-      participationPeriodDays: 12,
-      twitterUrl: "",
-      telegramUrl: "",
-      websiteUrl: "",
-      contractAddress: "",
-      status: "active",
-      createdAt: new Date(),
-      endsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+  });
+
+  const connectWalletMutation = useMutation({
+    mutationFn: async (data: { walletAddress: string; referralCode?: string }) => {
+      const res = await apiRequest("POST", "/api/auth/connect", data);
+      return res.json();
     },
-  ];
+    onSuccess: (user: User) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      toast({
+        title: "Wallet Connected",
+        description: "Successfully connected to Stellar network",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Connection Failed",
+        description: error instanceof Error ? error.message : "Failed to connect wallet",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleConnectWallet = () => {
-    setWalletAddress("GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
-    toast({
-      title: "Wallet Connected",
-      description: "Successfully connected to Stellar network",
-    });
-  };
-
-  const handleCreateProject = (data: any) => {
-    console.log("Creating project:", data);
-    setShowCreateWizard(false);
-    toast({
-      title: "Project Created!",
-      description: "Your token has been deployed to Stellar testnet",
-    });
-  };
-
-  const handleParticipate = (projectId: string) => {
-    console.log("Participating in project:", projectId);
-    toast({
-      title: "Participation Successful",
-      description: "You've joined the project with STAR points",
-    });
-  };
-
-  const handleMint = (xlmAmount: number) => {
-    console.log("Minting", xlmAmount * 10, "STAR points");
-    toast({
-      title: "STAR Points Minted",
-      description: `Successfully minted ${xlmAmount * 10} STAR points`,
+    const mockAddress = generateMockStellarAddress();
+    setWalletAddress(mockAddress);
+    
+    connectWalletMutation.mutate({
+      walletAddress: mockAddress,
+      referralCode: referralCode || undefined,
     });
   };
 
@@ -168,40 +125,61 @@ export default function MainApp() {
               </Button>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {mockProjects.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  onParticipate={handleParticipate}
-                />
-              ))}
-            </div>
+            {projectsLoading ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="space-y-4">
+                    <Skeleton className="h-48 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : projects.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground mb-4">No active projects yet</p>
+                <Button
+                  onClick={() => setShowCreateWizard(true)}
+                  data-testid="button-create-first-project"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create First Project
+                </Button>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    walletAddress={walletAddress}
+                    currentUserId={currentUser?.id}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {activeTab === "mint" && (
-          <MintPoints currentPoints={mockUser.starPoints} onMint={handleMint} />
-        )}
-
-        {activeTab === "global" && (
-          <GlobalStats
-            totalUsers={12548}
-            dailyActiveUsers={3421}
-            activeProjects={mockProjects.length}
-            totalPointsMinted={1245000}
+        {activeTab === "mint" && currentUser && (
+          <MintPoints 
+            currentPoints={currentUser.starPoints} 
+            walletAddress={walletAddress}
+            currentUserId={currentUser.id}
           />
         )}
 
-        {activeTab === "dashboard" && (
+        {activeTab === "global" && <GlobalStats />}
+
+        {activeTab === "dashboard" && currentUser && (
           <Dashboard
-            user={mockUser}
-            myProjects={[]}
-            myParticipations={[]}
-            referrals={[
-              { walletAddress: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", starPoints: 2500 },
-              { walletAddress: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", starPoints: 1200 },
-            ]}
+            user={{
+              id: currentUser.id,
+              walletAddress: currentUser.walletAddress,
+              starPoints: currentUser.starPoints,
+              referralCode: currentUser.referralCode,
+            }}
+            referrals={referrals}
           />
         )}
 
@@ -256,7 +234,8 @@ export default function MainApp() {
       {showCreateWizard && (
         <CreateProjectWizard
           onClose={() => setShowCreateWizard(false)}
-          onSubmit={handleCreateProject}
+          walletAddress={walletAddress}
+          currentUserId={currentUser?.id}
         />
       )}
     </div>

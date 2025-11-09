@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface ProjectFormData {
   name: string;
@@ -30,10 +33,12 @@ interface ProjectFormData {
 
 interface CreateProjectWizardProps {
   onClose: () => void;
-  onSubmit: (data: ProjectFormData) => void;
+  walletAddress?: string;
+  currentUserId?: string;
 }
 
-export default function CreateProjectWizard({ onClose, onSubmit }: CreateProjectWizardProps) {
+export default function CreateProjectWizard({ onClose, walletAddress, currentUserId }: CreateProjectWizardProps) {
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<ProjectFormData>({
     name: "",
@@ -53,6 +58,33 @@ export default function CreateProjectWizard({ onClose, onSubmit }: CreateProject
     participationPeriodDays: 7,
   });
 
+  const createProjectMutation = useMutation({
+    mutationFn: async (data: ProjectFormData & { walletAddress: string }) => {
+      const res = await apiRequest("POST", "/api/projects/create", data);
+      return res.json();
+    },
+    onSuccess: (project) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      if (currentUserId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/users", currentUserId, "projects"] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/global"] });
+      toast({
+        title: "Project Created!",
+        description: `${project.name} has been deployed to Stellar`,
+      });
+      onClose();
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.details?.[0]?.message || error?.error || "Failed to create project";
+      toast({
+        title: "Creation Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateField = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -63,6 +95,22 @@ export default function CreateProjectWizard({ onClose, onSubmit }: CreateProject
     if (total <= 100) {
       setFormData(newData);
     }
+  };
+
+  const handleSubmit = () => {
+    if (!walletAddress) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createProjectMutation.mutate({
+      ...formData,
+      walletAddress,
+    });
   };
 
   const totalPercent = formData.airdropPercent + formData.creatorPercent + formData.liquidityPercent;
@@ -323,6 +371,7 @@ export default function CreateProjectWizard({ onClose, onSubmit }: CreateProject
           <Button
             variant="outline"
             onClick={step === 1 ? onClose : () => setStep(step - 1)}
+            disabled={createProjectMutation.isPending}
             data-testid="button-back"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -330,14 +379,14 @@ export default function CreateProjectWizard({ onClose, onSubmit }: CreateProject
           </Button>
 
           <Button
-            onClick={step === 3 ? () => onSubmit(formData) : () => setStep(step + 1)}
-            disabled={step === 2 && totalPercent !== 100}
+            onClick={step === 3 ? handleSubmit : () => setStep(step + 1)}
+            disabled={(step === 2 && totalPercent !== 100) || createProjectMutation.isPending}
             data-testid="button-next"
           >
             {step === 3 ? (
               <>
                 <Check className="mr-2 h-4 w-4" />
-                Create Token
+                {createProjectMutation.isPending ? "Creating..." : "Create Token"}
               </>
             ) : (
               <>

@@ -1,19 +1,25 @@
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Users, TrendingUp, Rocket, Coins } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
-interface GlobalStatsProps {
+interface GlobalStatsData {
   totalUsers: number;
   dailyActiveUsers: number;
   activeProjects: number;
   totalPointsMinted: number;
 }
 
-export default function GlobalStats({
-  totalUsers,
-  dailyActiveUsers,
-  activeProjects,
-  totalPointsMinted,
-}: GlobalStatsProps) {
+export default function GlobalStats() {
+  const { data, isLoading } = useQuery<GlobalStatsData>({
+    queryKey: ["/api/stats/global"],
+  });
+
+  const totalUsers = data?.totalUsers || 0;
+  const dailyActiveUsers = data?.dailyActiveUsers || 0;
+  const activeProjects = data?.activeProjects || 0;
+  const totalPointsMinted = data?.totalPointsMinted || 0;
+
   const stats = [
     {
       label: "Total Users",
@@ -51,28 +57,42 @@ export default function GlobalStats({
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <Card
-            key={stat.label}
-            className="p-6 hover-elevate transition-all duration-300"
-            data-testid={`card-stat-${index}`}
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className={`p-3 rounded-lg bg-gradient-to-br ${stat.color}`}>
-                <stat.icon className="h-6 w-6 text-white" />
+        {isLoading ? (
+          <>
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <Skeleton className="h-12 w-12 rounded-lg" />
+                </div>
+                <Skeleton className="h-10 w-24 mb-2" />
+                <Skeleton className="h-4 w-32" />
+              </Card>
+            ))}
+          </>
+        ) : (
+          stats.map((stat, index) => (
+            <Card
+              key={stat.label}
+              className="p-6 hover-elevate transition-all duration-300"
+              data-testid={`card-stat-${index}`}
+            >
+              <div className="flex items-center gap-4 mb-4">
+                <div className={`p-3 rounded-lg bg-gradient-to-br ${stat.color}`}>
+                  <stat.icon className="h-6 w-6 text-white" />
+                </div>
               </div>
-            </div>
-            <div>
-              <div
-                className={`text-4xl font-bold mb-1 bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}
-                data-testid={`text-stat-value-${index}`}
-              >
-                {stat.value}
+              <div>
+                <div
+                  className={`text-4xl font-bold mb-1 bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}
+                  data-testid={`text-stat-value-${index}`}
+                >
+                  {stat.value}
+                </div>
+                <p className="text-sm text-muted-foreground">{stat.label}</p>
               </div>
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          ))
+        )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">

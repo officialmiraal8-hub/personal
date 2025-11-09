@@ -1,18 +1,78 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sparkles, TrendingUp, Flame } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { User } from "@shared/schema";
 
 interface MintPointsProps {
   currentPoints: number;
-  onMint: (xlmAmount: number) => void;
+  walletAddress?: string;
+  currentUserId?: string;
 }
 
-export default function MintPoints({ currentPoints, onMint }: MintPointsProps) {
+export default function MintPoints({ currentPoints, walletAddress, currentUserId }: MintPointsProps) {
   const [xlmAmount, setXlmAmount] = useState("");
   const starPoints = xlmAmount ? parseFloat(xlmAmount) * 10 : 0;
+  const { toast } = useToast();
+
+  const mintMutation = useMutation({
+    mutationFn: async (data: { walletAddress: string; xlmAmount: number }) => {
+      const res = await apiRequest("POST", "/api/points/mint", data);
+      return res.json();
+    },
+    onSuccess: (data: { user: User; transaction: { xlmAmount: number; starPointsMinted: number; referrerReward: number; referrerWallet: string | null } }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/global"] });
+      if (currentUserId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/users", currentUserId, "projects"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/users", currentUserId, "participations"] });
+      }
+      
+      setXlmAmount("");
+      
+      toast({
+        title: "STAR Points Minted!",
+        description: `Successfully minted ${data.transaction.starPointsMinted.toLocaleString()} STAR points from ${data.transaction.xlmAmount} XLM${data.transaction.referrerReward > 0 ? `. Your referrer earned ${data.transaction.referrerReward.toLocaleString()} bonus points!` : ""}`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Minting Failed",
+        description: error instanceof Error ? error.message : "Failed to mint STAR points",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleMint = () => {
+    if (!walletAddress) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!xlmAmount || parseFloat(xlmAmount) <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid XLM amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    mintMutation.mutate({
+      walletAddress,
+      xlmAmount: parseFloat(xlmAmount),
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -89,17 +149,12 @@ export default function MintPoints({ currentPoints, onMint }: MintPointsProps) {
 
             <Button
               className="w-full py-6 text-lg"
-              onClick={() => {
-                if (xlmAmount) {
-                  onMint(parseFloat(xlmAmount));
-                  setXlmAmount("");
-                }
-              }}
-              disabled={!xlmAmount || parseFloat(xlmAmount) <= 0}
+              onClick={handleMint}
+              disabled={!xlmAmount || parseFloat(xlmAmount) <= 0 || mintMutation.isPending}
               data-testid="button-mint"
             >
               <Sparkles className="mr-2 h-5 w-5" />
-              Mint STAR Points
+              {mintMutation.isPending ? "Minting..." : "Mint STAR Points"}
             </Button>
           </div>
         </Card>

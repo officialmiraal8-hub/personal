@@ -1,24 +1,38 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Copy, Share2, Users, TrendingUp, History } from "lucide-react";
+import { Copy, Share2, Users, TrendingUp, History, Rocket } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import type { Project, Participation, User } from "@shared/schema";
 
 interface DashboardProps {
   user: {
+    id: string;
     walletAddress: string;
     starPoints: number;
     referralCode: string;
     referredBy?: string;
   };
-  myProjects: any[];
-  myParticipations: any[];
-  referrals: any[];
+  referrals: User[];
 }
 
-export default function Dashboard({ user, myProjects, myParticipations, referrals }: DashboardProps) {
+export default function Dashboard({ user, referrals }: DashboardProps) {
   const { toast } = useToast();
+
+  const { data: myProjects = [], isLoading: projectsLoading } = useQuery<Project[]>({
+    queryKey: ["/api/users", user.id, "projects"],
+    enabled: !!user.id,
+  });
+
+  const { data: myParticipationsData = [], isLoading: participationsLoading } = useQuery<
+    Array<{ participation: Participation; project: Project | null }>
+  >({
+    queryKey: ["/api/users", user.id, "participations"],
+    enabled: !!user.id,
+  });
 
   const copyReferralCode = () => {
     const url = `${window.location.origin}?ref=${user.referralCode}`;
@@ -106,7 +120,21 @@ export default function Dashboard({ user, myProjects, myParticipations, referral
         </TabsList>
 
         <TabsContent value="projects" className="space-y-4">
-          {myProjects.length === 0 ? (
+          {projectsLoading ? (
+            <>
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <Skeleton className="h-5 w-32 mb-2" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                </Card>
+              ))}
+            </>
+          ) : myProjects.length === 0 ? (
             <Card className="p-12 text-center">
               <Rocket className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground">You haven't launched any projects yet</p>
@@ -127,19 +155,33 @@ export default function Dashboard({ user, myProjects, myParticipations, referral
         </TabsContent>
 
         <TabsContent value="participations" className="space-y-4">
-          {myParticipations.length === 0 ? (
+          {participationsLoading ? (
+            <>
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <Skeleton className="h-5 w-32 mb-2" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                </Card>
+              ))}
+            </>
+          ) : myParticipationsData.length === 0 ? (
             <Card className="p-12 text-center">
               <TrendingUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground">You haven't participated in any projects yet</p>
             </Card>
           ) : (
-            myParticipations.map((participation, index) => (
+            myParticipationsData.map(({ participation, project }, index) => (
               <Card key={index} className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="font-semibold">Project Name</h4>
+                    <h4 className="font-semibold">{project?.name || "Unknown Project"}</h4>
                     <p className="text-sm text-muted-foreground">
-                      {participation.starPointsUsed} STAR points
+                      {participation.starPointsUsed.toLocaleString()} STAR points
                     </p>
                   </div>
                   <Badge variant="secondary">Participated</Badge>
