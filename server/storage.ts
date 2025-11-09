@@ -1,5 +1,16 @@
-import { type User, type InsertUser, type Project, type InsertProject, type Participation, type InsertParticipation } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { type User, type InsertUser, type Project, type InsertProject, type Participation, type InsertParticipation, users, projects, participations } from "@shared/schema";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { eq, and, gt } from "drizzle-orm";
+import ws from "ws";
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is not set");
+}
+
+const db = drizzle({
+  connection: process.env.DATABASE_URL,
+  ws: ws,
+});
 
 export interface IStorage {
   // User operations
@@ -27,147 +38,107 @@ export interface IStorage {
   getReferralsByUser(userId: string): Promise<User[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private projects: Map<string, Project>;
-  private participations: Map<string, Participation>;
-
-  constructor() {
-    this.users = new Map();
-    this.projects = new Map();
-    this.participations = new Map();
-  }
-
-  // User operations
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0];
   }
 
   async getAllUsers(): Promise<User[]> {
-    return Array.from(this.users.values());
+    return await db.select().from(users);
   }
 
   async getUserByWallet(walletAddress: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.walletAddress === walletAddress,
-    );
+    const result = await db.select().from(users).where(eq(users.walletAddress, walletAddress));
+    return result[0];
   }
 
   async getUserByReferralCode(referralCode: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.referralCode === referralCode,
-    );
+    const result = await db.select().from(users).where(eq(users.referralCode, referralCode));
+    return result[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { 
-      ...insertUser, 
-      id,
-      starPoints: insertUser.starPoints || 0,
-      referredBy: insertUser.referredBy || null,
-      createdAt: new Date(),
-    };
-    this.users.set(id, user);
-    return user;
+    const result = await db.insert(users).values(insertUser).returning();
+    return result[0];
   }
 
   async updateUserPoints(userId: string, points: number): Promise<User> {
-    const user = this.users.get(userId);
-    if (!user) {
+    const result = await db.update(users)
+      .set({ starPoints: points })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!result[0]) {
       throw new Error("User not found");
     }
-    user.starPoints = points;
-    this.users.set(userId, user);
-    return user;
+    return result[0];
   }
 
-  // Project operations
   async getProject(id: string): Promise<Project | undefined> {
-    return this.projects.get(id);
+    const result = await db.select().from(projects).where(eq(projects.id, id));
+    return result[0];
   }
 
   async getAllProjects(): Promise<Project[]> {
-    return Array.from(this.projects.values());
+    return await db.select().from(projects);
   }
 
   async getActiveProjects(): Promise<Project[]> {
     const now = new Date();
-    return Array.from(this.projects.values()).filter(
-      (project) => project.status === "active" && new Date(project.endsAt) > now
-    );
+    return await db.select()
+      .from(projects)
+      .where(
+        and(
+          eq(projects.status, "active"),
+          gt(projects.endsAt, now)
+        )
+      );
   }
 
   async getProjectsByCreator(creatorId: string): Promise<Project[]> {
-    return Array.from(this.projects.values()).filter(
-      (project) => project.creatorId === creatorId
-    );
+    return await db.select().from(projects).where(eq(projects.creatorId, creatorId));
   }
 
   async createProject(insertProject: InsertProject): Promise<Project> {
-    const id = randomUUID();
     const createdAt = new Date();
     const endsAt = new Date(
       createdAt.getTime() + insertProject.participationPeriodDays * 24 * 60 * 60 * 1000
     );
-    
-    const project: Project = {
+
+    const result = await db.insert(projects).values({
       ...insertProject,
-      id,
-      decimals: insertProject.decimals || 7,
-      hasVesting: insertProject.hasVesting ?? false,
-      logoUrl: insertProject.logoUrl || null,
-      twitterUrl: insertProject.twitterUrl || null,
-      telegramUrl: insertProject.telegramUrl || null,
-      websiteUrl: insertProject.websiteUrl || null,
-      vestingPeriodDays: insertProject.vestingPeriodDays || null,
-      contractAddress: `STELLAR_CONTRACT_${id.slice(0, 8).toUpperCase()}`,
-      status: "active",
-      createdAt,
       endsAt,
-    };
-    this.projects.set(id, project);
-    return project;
+    }).returning();
+    
+    return result[0];
   }
 
-  // Participation operations
   async getParticipation(id: string): Promise<Participation | undefined> {
-    return this.participations.get(id);
+    const result = await db.select().from(participations).where(eq(participations.id, id));
+    return result[0];
   }
 
   async getParticipationsByUser(userId: string): Promise<Participation[]> {
-    return Array.from(this.participations.values()).filter(
-      (participation) => participation.userId === userId
-    );
+    return await db.select().from(participations).where(eq(participations.userId, userId));
   }
 
   async getParticipationsByProject(projectId: string): Promise<Participation[]> {
-    return Array.from(this.participations.values()).filter(
-      (participation) => participation.projectId === projectId
-    );
+    return await db.select().from(participations).where(eq(participations.projectId, projectId));
   }
 
   async createParticipation(insertParticipation: InsertParticipation): Promise<Participation> {
-    const id = randomUUID();
-    const participation: Participation = {
-      ...insertParticipation,
-      id,
-      createdAt: new Date(),
-    };
-    this.participations.set(id, participation);
-    return participation;
+    const result = await db.insert(participations).values(insertParticipation).returning();
+    return result[0];
   }
 
-  // Referral operations
   async getReferralsByUser(userId: string): Promise<User[]> {
-    const user = this.users.get(userId);
+    const user = await this.getUser(userId);
     if (!user) {
       return [];
     }
-    return Array.from(this.users.values()).filter(
-      (u) => u.referredBy === user.referralCode
-    );
+    return await db.select().from(users).where(eq(users.referredBy, user.referralCode));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
