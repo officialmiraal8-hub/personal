@@ -1,14 +1,16 @@
 import { Button } from "@/components/ui/button";
-import { Wallet, Menu } from "lucide-react";
-import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Menu, Wifi } from "lucide-react";
+import WalletConnectButton from "@/components/WalletConnectButton";
+import { useWallet } from "@/contexts/WalletContext";
 
 interface AppHeaderProps {
   onMenuClick: () => void;
-  walletAddress?: string;
-  onConnectWallet: () => void;
 }
 
-export default function AppHeader({ onMenuClick, walletAddress, onConnectWallet }: AppHeaderProps) {
+export default function AppHeader({ onMenuClick }: AppHeaderProps) {
+  const { network } = useWallet();
+  
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container flex h-20 items-center justify-between px-6">
@@ -47,18 +49,13 @@ export default function AppHeader({ onMenuClick, walletAddress, onConnectWallet 
           </div>
         </div>
         
-        <Button
-          variant={walletAddress ? "secondary" : "default"}
-          onClick={onConnectWallet}
-          data-testid="button-connect-wallet"
-          className="gap-2"
-        >
-          <Wallet className="h-4 w-4" />
-          {walletAddress 
-            ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-            : "Connect Wallet"
-          }
-        </Button>
+        <div className="flex items-center gap-3">
+          <Badge variant="secondary" className="hidden sm:flex items-center gap-1">
+            <Wifi className="h-3 w-3" />
+            {network === 'testnet' ? 'Testnet' : 'Mainnet'}
+          </Badge>
+          <WalletConnectButton />
+        </div>
       </div>
     </header>
   );

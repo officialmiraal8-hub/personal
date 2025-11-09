@@ -4,10 +4,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sparkles, TrendingUp, Flame } from "lucide-react";
+import { Sparkles, Zap, ArrowRight, Gift, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
+import { buildMintStarPointsTransaction, submitTransaction } from "@/lib/sorobanClient";
+import { freighterWallet } from "@/lib/walletConnect";
+import { getExplorerUrl } from "@/config/contracts";
 
 interface MintPointsProps {
   currentPoints: number;
@@ -22,10 +25,30 @@ export default function MintPoints({ currentPoints, walletAddress, currentUserId
 
   const mintMutation = useMutation({
     mutationFn: async (data: { walletAddress: string; xlmAmount: number }) => {
-      const res = await apiRequest("POST", "/api/points/mint", data);
-      return res.json();
+      // Step 1: Build Soroban transaction
+      const network = await freighterWallet.getFreighterNetwork();
+      const unsignedXDR = await buildMintStarPointsTransaction(
+        data.walletAddress,
+        data.xlmAmount,
+        network
+      );
+      
+      // Step 2: Sign with Freighter wallet
+      const signedXDR = await freighterWallet.signTransaction(unsignedXDR);
+      
+      // Step 3: Submit to Stellar network
+      const { hash } = await submitTransaction(signedXDR);
+      
+      // Step 4: Update local database
+      const res = await apiRequest("POST", "/api/points/mint", {
+        ...data,
+        txHash: hash,
+      });
+      const result = await res.json();
+      
+      return { ...result, txHash: hash, network };
     },
-    onSuccess: (data: { user: User; transaction: { xlmAmount: number; starPointsMinted: number; referrerReward: number; referrerWallet: string | null } }) => {
+    onSuccess: (data: { user: User; transaction: { xlmAmount: number; starPointsMinted: number; referrerReward: number; referrerWallet: string | null }; txHash: string; network: 'testnet' | 'mainnet' }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/global"] });
       if (currentUserId) {
@@ -35,15 +58,29 @@ export default function MintPoints({ currentPoints, walletAddress, currentUserId
       
       setXlmAmount("");
       
+      const explorerUrl = getExplorerUrl(data.network, 'tx', data.txHash);
+      
       toast({
         title: "STAR Points Minted!",
-        description: `Successfully minted ${data.transaction.starPointsMinted.toLocaleString()} STAR points from ${data.transaction.xlmAmount} XLM${data.transaction.referrerReward > 0 ? `. Your referrer earned ${data.transaction.referrerReward.toLocaleString()} bonus points!` : ""}`,
+        description: (
+          <div className="space-y-2">
+            <p>Successfully minted {data.transaction.starPointsMinted.toLocaleString()} STAR points from {data.transaction.xlmAmount} XLM{data.transaction.referrerReward > 0 ? `. Your referrer earned ${data.transaction.referrerReward.toLocaleString()} bonus points!` : ""}</p>
+            <a 
+              href={explorerUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-primary hover:underline"
+            >
+              View on Stellar Explorer <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        ),
       });
     },
     onError: (error) => {
       toast({
         title: "Minting Failed",
-        description: error instanceof Error ? error.message : "Failed to mint STAR points",
+        description: error instanceof Error ? error.message : "Failed to mint STAR points. Check your wallet balance and network connection.",
         variant: "destructive",
       });
     },
@@ -141,9 +178,9 @@ export default function MintPoints({ currentPoints, walletAddress, currentUserId
               />
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-2xl font-semibold">
+            <div className="flex items-center justify-center gap-3 text-2xl font-semibold">
               <span className="text-muted-foreground">{xlmAmount || "0"} XLM</span>
-              <span className="text-primary">=</span>
+              <ArrowRight className="h-6 w-6 text-primary" />
               <span className="text-primary">{starPoints.toLocaleString()} STAR</span>
             </div>
 
@@ -153,7 +190,7 @@ export default function MintPoints({ currentPoints, walletAddress, currentUserId
               disabled={!xlmAmount || parseFloat(xlmAmount) <= 0 || mintMutation.isPending}
               data-testid="button-mint"
             >
-              <Sparkles className="mr-2 h-5 w-5" />
+              <Zap className="mr-2 h-5 w-5" />
               {mintMutation.isPending ? "Minting..." : "Mint STAR Points"}
             </Button>
           </div>
@@ -163,8 +200,8 @@ export default function MintPoints({ currentPoints, walletAddress, currentUserId
       <div className="grid md:grid-cols-2 gap-4">
         <Card className="p-6">
           <div className="flex items-start gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <TrendingUp className="h-6 w-6 text-primary" />
+            <div className="p-3 bg-gradient-to-br from-primary to-orange-400 rounded-lg">
+              <Sparkles className="h-6 w-6 text-white" />
             </div>
             <div>
               <h3 className="font-semibold mb-1">Participate in Projects</h3>
@@ -177,8 +214,8 @@ export default function MintPoints({ currentPoints, walletAddress, currentUserId
 
         <Card className="p-6">
           <div className="flex items-start gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Flame className="h-6 w-6 text-primary" />
+            <div className="p-3 bg-gradient-to-br from-orange-400 to-primary rounded-lg">
+              <Gift className="h-6 w-6 text-white" />
             </div>
             <div>
               <h3 className="font-semibold mb-1">Referral Rewards</h3>

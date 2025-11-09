@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useWallet } from "@/contexts/WalletContext";
 import AppHeader from "@/components/AppHeader";
 import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
@@ -17,21 +18,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, Project } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function generateMockStellarAddress(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let address = 'G';
-  for (let i = 0; i < 55; i++) {
-    address += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return address;
-}
-
 export default function MainApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("launch");
   const [showCreateWizard, setShowCreateWizard] = useState(false);
-  const [walletAddress, setWalletAddress] = useState<string>();
   const { toast } = useToast();
+  const { publicKey: walletAddress, isConnected } = useWallet();
 
   const referralCode = new URLSearchParams(window.location.search).get("ref");
 
@@ -67,10 +59,6 @@ export default function MainApp() {
     },
     onSuccess: (user: User) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
-      toast({
-        title: "Wallet Connected",
-        description: "Successfully connected to Stellar network",
-      });
     },
     onError: (error) => {
       toast({
@@ -81,22 +69,19 @@ export default function MainApp() {
     },
   });
 
-  const handleConnectWallet = () => {
-    const mockAddress = generateMockStellarAddress();
-    setWalletAddress(mockAddress);
-    
-    connectWalletMutation.mutate({
-      walletAddress: mockAddress,
-      referralCode: referralCode || undefined,
-    });
-  };
+  useEffect(() => {
+    if (walletAddress && isConnected && !currentUser) {
+      connectWalletMutation.mutate({
+        walletAddress,
+        referralCode: referralCode || undefined,
+      });
+    }
+  }, [walletAddress, isConnected]);
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
         onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-        walletAddress={walletAddress}
-        onConnectWallet={handleConnectWallet}
       />
 
       <Sidebar

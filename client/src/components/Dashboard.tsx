@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Copy, Share2, Users, TrendingUp, History, Rocket } from "lucide-react";
+import { Copy, Share2, Users, TrendingUp, Award, Gift, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import type { Project, Participation, User } from "@shared/schema";
@@ -55,24 +55,8 @@ export default function Dashboard({ user, referrals }: DashboardProps) {
       <div className="grid md:grid-cols-3 gap-6">
         <Card className="p-6 md:col-span-2">
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <svg
-                className="w-20 h-20"
-                viewBox="0 0 100 100"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <defs>
-                  <linearGradient id="dashStarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#FF6B00" />
-                    <stop offset="100%" stopColor="#FFA366" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d="M50 5 L61 39 L97 39 L68 61 L79 95 L50 73 L21 95 L32 61 L3 39 L39 39 Z"
-                  fill="url(#dashStarGradient)"
-                />
-              </svg>
+            <div className="p-4 rounded-xl bg-gradient-to-br from-primary to-orange-400">
+              <Sparkles className="h-12 w-12 text-white" />
             </div>
             <div className="flex-1">
               <p className="text-sm text-muted-foreground mb-1">STAR Points Balance</p>
@@ -85,7 +69,9 @@ export default function Dashboard({ user, referrals }: DashboardProps) {
 
         <Card className="p-6">
           <div className="text-center">
-            <Users className="h-8 w-8 mx-auto mb-2 text-primary" />
+            <div className="inline-flex p-3 rounded-xl bg-gradient-to-br from-primary to-orange-400 mb-3">
+              <Users className="h-8 w-8 text-white" />
+            </div>
             <div className="text-3xl font-bold" data-testid="text-referral-count">
               {referrals.length}
             </div>
@@ -136,7 +122,9 @@ export default function Dashboard({ user, referrals }: DashboardProps) {
             </>
           ) : myProjects.length === 0 ? (
             <Card className="p-12 text-center">
-              <Rocket className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <div className="inline-flex p-4 rounded-xl bg-secondary mb-4">
+                <Sparkles className="h-12 w-12 text-muted-foreground" />
+              </div>
               <p className="text-muted-foreground">You haven't launched any projects yet</p>
             </Card>
           ) : (

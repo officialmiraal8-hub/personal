@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, TrendingUp, Rocket, Coins } from "lucide-react";
+import { Database, Users, Rocket, TrendingUp } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 interface GlobalStatsData {
@@ -42,7 +42,7 @@ export default function GlobalStats() {
     {
       label: "Total STAR Points Minted",
       value: totalPointsMinted.toLocaleString(),
-      icon: Coins,
+      icon: Database,
       color: "from-orange-500 to-primary",
     },
   ];

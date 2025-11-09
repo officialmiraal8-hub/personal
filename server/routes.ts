@@ -118,14 +118,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/points/mint", async (req, res) => {
     try {
+      // BLOCKCHAIN INTEGRATION: This endpoint now receives txHash from on-chain transaction
+      // TODO: Verify transaction on Stellar network using txHash before updating database
+      // TODO: Query actual STAR points balance from TokenLaunch contract using getStarPointsBalance()
       const mintSchema = z.object({
         walletAddress: z.string().min(1, "Wallet address is required"),
         xlmAmount: z.number()
           .positive("XLM amount must be positive")
           .max(10000, "XLM amount cannot exceed 10,000"),
+        txHash: z.string().optional(), // Transaction hash from Stellar network
       });
       
-      const { walletAddress, xlmAmount } = mintSchema.parse(req.body);
+      const { walletAddress, xlmAmount, txHash } = mintSchema.parse(req.body);
       
       const user = await storage.getUserByWallet(walletAddress);
       if (!user) {
@@ -170,6 +174,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/projects/create", async (req, res) => {
     try {
+      // BLOCKCHAIN INTEGRATION: This endpoint now receives txHash from on-chain transaction
+      // TODO: Verify transaction on Stellar network using txHash before creating project
+      // TODO: Query project data from TokenLaunch contract using getProjectFromChain()
+      // TODO: Store on-chain project ID returned from create_project contract call
       const createProjectSchema = insertProjectSchema.extend({
         name: z.string().min(2, "Name must be at least 2 characters").max(50, "Name must not exceed 50 characters"),
         symbol: z.string().min(2, "Symbol must be at least 2 characters").max(10, "Symbol must not exceed 10 characters").toUpperCase(),
@@ -184,6 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }, "Minimum liquidity must be at least 500"),
         participationPeriodDays: z.number().min(3, "Participation period must be at least 3 days").max(15, "Participation period must not exceed 15 days"),
         walletAddress: z.string().min(1, "Wallet address is required"),
+        txHash: z.string().optional(), // Transaction hash from Stellar network
       }).refine((data) => {
         const total = data.airdropPercent + data.creatorPercent + data.liquidityPercent;
         return total === 100;
@@ -199,7 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const validatedData = createProjectSchema.parse(req.body);
-      const { walletAddress, ...projectData } = validatedData;
+      const { walletAddress, txHash, ...projectData } = validatedData;
       
       const user = await storage.getUserByWallet(walletAddress);
       if (!user) {
@@ -252,13 +261,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/projects/:projectId/participate", async (req, res) => {
     try {
+      // BLOCKCHAIN INTEGRATION: This endpoint now receives txHash from on-chain transaction
+      // TODO: Verify transaction on Stellar network using txHash before updating database
+      // TODO: Query participation data from TokenLaunch contract using getParticipation()
+      // TODO: Verify STAR points were actually burned/transferred on-chain
       const { projectId } = req.params;
       const participateSchema = z.object({
         walletAddress: z.string().min(1, "Wallet address is required"),
         starPoints: z.number().positive("STAR points must be positive"),
+        txHash: z.string().optional(), // Transaction hash from Stellar network
       });
       
-      const { walletAddress, starPoints } = participateSchema.parse(req.body);
+      const { walletAddress, starPoints, txHash } = participateSchema.parse(req.body);
       
       const project = await storage.getProject(projectId);
       if (!project) {

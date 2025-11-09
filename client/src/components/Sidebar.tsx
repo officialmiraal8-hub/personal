@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Rocket, Coins, Globe, LayoutDashboard, BookOpen, Users, X } from "lucide-react";
+import { Sparkles, Coins, Globe2, LayoutDashboard, FileText, Users, X } from "lucide-react";
 import { FaTwitter, FaTelegram, FaDiscord } from "react-icons/fa";
 
 interface SidebarProps {
@@ -11,11 +11,11 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, onTabChange, isOpen, onClose }: SidebarProps) {
   const navItems = [
-    { id: "launch", label: "Launch", icon: Rocket },
+    { id: "launch", label: "Launch", icon: Sparkles },
     { id: "mint", label: "Mint Points", icon: Coins },
-    { id: "global", label: "Global", icon: Globe },
+    { id: "global", label: "Global", icon: Globe2 },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "docs", label: "Documentation", icon: BookOpen },
+    { id: "docs", label: "Documentation", icon: FileText },
     { id: "join", label: "Join Us", icon: Users },
   ];
   

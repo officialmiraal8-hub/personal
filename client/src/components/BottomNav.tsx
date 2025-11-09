@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Rocket, Coins, Globe, LayoutDashboard, BookOpen, Users } from "lucide-react";
+import { Sparkles, Coins, Globe2, LayoutDashboard, FileText, Users } from "lucide-react";
 import { FaTwitter, FaTelegram, FaDiscord } from "react-icons/fa";
 
 interface BottomNavProps {
@@ -9,11 +9,11 @@ interface BottomNavProps {
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const navItems = [
-    { id: "launch", label: "Launch", icon: Rocket },
+    { id: "launch", label: "Launch", icon: Sparkles },
     { id: "mint", label: "Mint Points", icon: Coins },
-    { id: "global", label: "Global", icon: Globe },
+    { id: "global", label: "Global", icon: Globe2 },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "docs", label: "Documentation", icon: BookOpen },
+    { id: "docs", label: "Documentation", icon: FileText },
     { id: "join", label: "Join Us", icon: Users },
   ];
   

@@ -9,9 +9,12 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { ArrowRight, ArrowLeft, Check } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { buildCreateProjectTransaction, submitTransaction } from "@/lib/sorobanClient";
+import { freighterWallet } from "@/lib/walletConnect";
+import { getExplorerUrl } from "@/config/contracts";
 
 interface ProjectFormData {
   name: string;
@@ -60,23 +63,74 @@ export default function CreateProjectWizard({ onClose, walletAddress, currentUse
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: ProjectFormData & { walletAddress: string }) => {
-      const res = await apiRequest("POST", "/api/projects/create", data);
-      return res.json();
+      // Step 1: Build Soroban transaction
+      const network = await freighterWallet.getFreighterNetwork();
+      
+      // For now, use placeholder token address - in production, this would be created first
+      const placeholderTokenAddress = "GBGTK4RQSA3XRJLOW7MX3FJBFPXZVFZLZXUK2WVQXG3DFI5NBVSAMPLE";
+      
+      const unsignedXDR = await buildCreateProjectTransaction(
+        data.walletAddress,
+        {
+          name: data.name,
+          symbol: data.symbol,
+          tokenAddress: placeholderTokenAddress,
+          totalSupply: data.totalSupply,
+          airdropPercent: data.airdropPercent,
+          creatorPercent: data.creatorPercent,
+          liquidityPercent: data.liquidityPercent,
+          minimumLiquidity: data.minimumLiquidity,
+          participationPeriodDays: data.participationPeriodDays,
+          hasVesting: data.hasVesting,
+          vestingPeriodDays: data.vestingPeriodDays,
+        },
+        network
+      );
+      
+      // Step 2: Sign with Freighter wallet
+      const signedXDR = await freighterWallet.signTransaction(unsignedXDR);
+      
+      // Step 3: Submit to Stellar network
+      const { hash } = await submitTransaction(signedXDR);
+      
+      // Step 4: Update local database with on-chain data
+      const res = await apiRequest("POST", "/api/projects/create", {
+        ...data,
+        txHash: hash,
+      });
+      const result = await res.json();
+      
+      return { ...result, txHash: hash, network };
     },
-    onSuccess: (project) => {
+    onSuccess: (data: { name: string; txHash: string; network: 'testnet' | 'mainnet' }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       if (currentUserId) {
         queryClient.invalidateQueries({ queryKey: ["/api/users", currentUserId, "projects"] });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/stats/global"] });
+      
+      const explorerUrl = getExplorerUrl(data.network, 'tx', data.txHash);
+      
       toast({
         title: "Project Created!",
-        description: `${project.name} has been deployed to Stellar`,
+        description: (
+          <div className="space-y-2">
+            <p>{data.name} has been deployed to Stellar blockchain!</p>
+            <a 
+              href={explorerUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-primary hover:underline"
+            >
+              View on Stellar Explorer <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        ),
       });
       onClose();
     },
     onError: (error: any) => {
-      const errorMessage = error?.details?.[0]?.message || error?.error || "Failed to create project";
+      const errorMessage = error?.details?.[0]?.message || error?.error || error?.message || "Failed to create project";
       toast({
         title: "Creation Failed",
         description: errorMessage,

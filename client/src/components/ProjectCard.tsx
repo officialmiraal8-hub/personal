@@ -12,11 +12,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Coins, Droplet, TrendingUp, Users } from "lucide-react";
+import { Timer, Users, Lock, CheckCircle2, Coins, TrendingUp, ExternalLink } from "lucide-react";
 import { type Project } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { buildParticipateTransaction, submitTransaction } from "@/lib/sorobanClient";
+import { freighterWallet } from "@/lib/walletConnect";
+import { getExplorerUrl } from "@/config/contracts";
 
 interface ProjectCardProps {
   project: Project;
@@ -35,10 +38,35 @@ export default function ProjectCard({ project, walletAddress, currentUserId }: P
 
   const participateMutation = useMutation({
     mutationFn: async (data: { walletAddress: string; starPoints: number }) => {
-      const res = await apiRequest("POST", `/api/projects/${project.id}/participate`, data);
-      return res.json();
+      // Step 1: Build Soroban transaction
+      const network = await freighterWallet.getFreighterNetwork();
+      
+      // For on-chain project ID, use the local project ID for now
+      const onChainProjectId = parseInt(project.id);
+      
+      const unsignedXDR = await buildParticipateTransaction(
+        data.walletAddress,
+        onChainProjectId,
+        data.starPoints,
+        network
+      );
+      
+      // Step 2: Sign with Freighter wallet
+      const signedXDR = await freighterWallet.signTransaction(unsignedXDR);
+      
+      // Step 3: Submit to Stellar network
+      const { hash } = await submitTransaction(signedXDR);
+      
+      // Step 4: Update local database
+      const res = await apiRequest("POST", `/api/projects/${project.id}/participate`, {
+        ...data,
+        txHash: hash,
+      });
+      const result = await res.json();
+      
+      return { ...result, txHash: hash, network };
     },
-    onSuccess: (data) => {
+    onSuccess: (data: { participation: { starPointsUsed: number }; burned: number; toCreator: number; txHash: string; network: 'testnet' | 'mainnet' }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/global"] });
@@ -48,9 +76,24 @@ export default function ProjectCard({ project, walletAddress, currentUserId }: P
       if (project.creatorId) {
         queryClient.invalidateQueries({ queryKey: ["/api/users", project.creatorId, "projects"] });
       }
+      
+      const explorerUrl = getExplorerUrl(data.network, 'tx', data.txHash);
+      
       toast({
         title: "Participation Successful!",
-        description: `Participated with ${data.participation.starPointsUsed} STAR points! ${data.burned} burned, ${data.toCreator} to creator`,
+        description: (
+          <div className="space-y-2">
+            <p>Participated with {data.participation.starPointsUsed} STAR points! {data.burned} burned, {data.toCreator} to creator</p>
+            <a 
+              href={explorerUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-primary hover:underline"
+            >
+              View on Stellar Explorer <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        ),
       });
       setDialogOpen(false);
       setStarPoints("");
@@ -58,7 +101,7 @@ export default function ProjectCard({ project, walletAddress, currentUserId }: P
     onError: (error: any) => {
       toast({
         title: "Participation Failed",
-        description: error.message || "Failed to participate in project",
+        description: error?.message || "Failed to participate in project. Check your STAR points balance.",
         variant: "destructive",
       });
     },
@@ -135,23 +178,19 @@ export default function ProjectCard({ project, walletAddress, currentUserId }: P
         
         <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
           <div className="flex items-center gap-2">
-            <Coins className="h-4 w-4 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Timer className="h-4 w-4 text-primary" />
+            </div>
             <div>
-              <div className="text-xs text-muted-foreground">Supply</div>
-              <div className="font-medium">{Number(project.totalSupply).toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Time Left</div>
+              <div className="font-medium">{daysRemaining > 0 ? `${daysRemaining}d` : 'Ended'}</div>
             </div>
           </div>
           
           <div className="flex items-center gap-2">
-            <Droplet className="h-4 w-4 text-primary" />
-            <div>
-              <div className="text-xs text-muted-foreground">Liquidity</div>
-              <div className="font-medium">{project.minimumLiquidity} XLM</div>
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Users className="h-4 w-4 text-primary" />
             </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
             <div>
               <div className="text-xs text-muted-foreground">Airdrop</div>
               <div className="font-medium">{project.airdropPercent}%</div>
@@ -159,10 +198,22 @@ export default function ProjectCard({ project, walletAddress, currentUserId }: P
           </div>
           
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Lock className="h-4 w-4 text-primary" />
+            </div>
             <div>
-              <div className="text-xs text-muted-foreground">Creator</div>
-              <div className="font-medium">{project.creatorPercent}%</div>
+              <div className="text-xs text-muted-foreground">Liquidity</div>
+              <div className="font-medium">{project.minimumLiquidity} XLM</div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Supply</div>
+              <div className="font-medium">{Number(project.totalSupply).toLocaleString()}</div>
             </div>
           </div>
         </div>
